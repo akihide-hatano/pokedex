@@ -3,11 +3,10 @@ const pokemonListElement = document.getElementById('pokemonList');
 const prevPageButton = document.getElementById('prevPage');
 const nextPageButton = document.getElementById('nextPage');
 
-// ★★★ ここからモーダル関連のDOM要素を取得する部分を追加 ★★★
+// モーダル関連のDOM要素を取得する部分 (既存)
 const pokemonModal = document.getElementById('pokemonModal');
 const closeModalButton = document.getElementById('closeModal');
 const modalContent = document.getElementById('modalContent');
-// ★★★ モーダル関連DOM要素取得ここまで ★★★
 
 let nextUrl = null;
 let prevUrl = null;
@@ -36,22 +35,44 @@ async function fetchAndDisplayPokemons(url) {
 
         pokemonListElement.innerHTML = ''; // 古いリストをクリア
 
-        for (const pokemon of data.results) {
-            // ポケモンカードのHTML要素を動的に作成
-            const pokemonCard = document.createElement('div');
-            pokemonCard.classList.add('pokemon-card', 'bg-white', 'p-6', 'rounded-xl', 'shadow-lg', 'text-center', 'transform', 'hover:scale-105', 'transition-transform', 'duration-200', 'cursor-pointer'); // ★ 'cursor-pointer' を追加
+        // ★ 各ポケモンの詳細データを並行して取得するためのPromise.allSettled を使用
+        // これにより、個々のAPIリクエストが並行して走り、表示が速くなります。
+        // ただし、APIへのリクエスト数が一気に増える点に注意。
+        const pokemonDetailsPromises = data.results.map(pokemon => fetch(pokemon.url).then(res => res.json()));
+        const allPokemonDetails = await Promise.allSettled(pokemonDetailsPromises);
 
-            // ★ dataset 属性にポケモンの詳細URLを保存
-            pokemonCard.dataset.pokemonUrl = pokemon.url;
+        allPokemonDetails.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                const detailData = result.value;
+                const pokemon = data.results[index]; // 元のポケモン情報を取得
 
-            pokemonCard.innerHTML = `
-                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${extractIdFromUrl(pokemon.url)}.png" alt="${pokemon.name}" class="mx-auto w-28 h-28 mb-4">
-                <h3 class="text-xl font-bold capitalize text-gray-800">${pokemon.name}</h3>
-                <p class="text-sm text-gray-600 mt-1">ID: #${String(extractIdFromUrl(pokemon.url)).padStart(3, '0')}</p>
-                {{-- タイプ情報は詳細データ取得後に表示するため、ここでは表示しない --}}
-            `;
-            pokemonListElement.appendChild(pokemonCard);
-        }
+                const mainType = detailData.types[0].type.name; // 最初のタイプをメインタイプとする
+                const backgroundColorClass = getCardBackgroundColorClass(mainType); // 背景色クラスを取得
+
+                // ポケモンカードのHTML要素を動的に作成
+                const pokemonCard = document.createElement('div');
+                // ★ bg-white を削除し、backgroundColorClass を追加
+                pokemonCard.classList.add('pokemon-card', 'p-6', 'rounded-xl', 'shadow-lg', 'text-center', 'transform', 'hover:scale-105', 'transition-transform', 'duration-200', 'cursor-pointer', backgroundColorClass);
+
+                pokemonCard.dataset.pokemonUrl = pokemon.url;
+
+                pokemonCard.innerHTML = `
+                    <img src="${detailData.sprites.front_default}" alt="${detailData.name}" class="mx-auto w-28 h-28 mb-4">
+                    <h3 class="text-xl font-bold capitalize text-white">${detailData.name}</h3>
+                    <p class="text-sm text-white mt-1">ID: #${String(detailData.id).padStart(3, '0')}</p>
+                    <div class="mt-3 flex justify-center space-x-2">
+                        ${detailData.types.map(typeInfo => `
+                            <span class="px-3 py-1 text-xs font-semibold rounded-full ${getTypeColorClass(typeInfo.type.name)}">
+                                ${typeInfo.type.name}
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+                pokemonListElement.appendChild(pokemonCard);
+            } else {
+                console.error(`Failed to fetch detail for a pokemon: ${result.reason}`);
+            }
+        });
 
     } catch (error) {
         pokemonListElement.innerHTML = `<p class="text-center col-span-full text-red-500 text-lg">データの取得中にエラーが発生しました: ${error.message}</p>`;
@@ -65,7 +86,7 @@ function extractIdFromUrl(url) {
     return parts[parts.length - 2];
 }
 
-// ポケモンのタイプに応じた Tailwind CSS クラスを返すヘルパー関数 (既存)
+// ポケモンのタイプに応じたテキストの色クラスを返すヘルパー関数 (既存)
 function getTypeColorClass(type) {
     switch (type) {
         case 'normal': return 'bg-gray-300 text-gray-800';
@@ -89,12 +110,35 @@ function getTypeColorClass(type) {
     }
 }
 
-// ★★★ ここからモーダル表示ロジックの追加 ★★★
+// ★★★ カードの背景色用の新しいヘルパー関数を追加 ★★★
+// getCardBackgroundColorClass - カードの背景色に使うクラスを返す
+function getCardBackgroundColorClass(type) {
+    switch (type) {
+        case 'normal': return 'bg-gray-400';
+        case 'fire': return 'bg-red-600';
+        case 'water': return 'bg-blue-600';
+        case 'grass': return 'bg-green-600';
+        case 'electric': return 'bg-yellow-500';
+        case 'ice': return 'bg-blue-400';
+        case 'fighting': return 'bg-orange-800';
+        case 'poison': return 'bg-purple-700';
+        case 'ground': return 'bg-yellow-800';
+        case 'flying': return 'bg-indigo-400';
+        case 'psychic': return 'bg-pink-600';
+        case 'bug': return 'bg-lime-700';
+        case 'rock': return 'bg-amber-800';
+        case 'ghost': return 'bg-purple-900';
+        case 'dragon': return 'bg-indigo-800';
+        case 'steel': return 'bg-blue-gray-500';
+        case 'fairy': return 'bg-pink-400';
+        default: return 'bg-gray-300'; // デフォルト色
+    }
+}
 
-// 詳細データを取得し、モーダルに表示する関数
+// モーダル表示ロジック (既存)
 async function displayPokemonDetails(pokemonUrl) {
-    modalContent.innerHTML = '<p class="text-gray-500">詳細データを読み込み中...</p>'; // ローディング表示
-    pokemonModal.classList.remove('hidden'); // モーダルを表示
+    modalContent.innerHTML = '<p class="text-gray-500">詳細データを読み込み中...</p>';
+    pokemonModal.classList.remove('hidden');
 
     try {
         const response = await fetch(pokemonUrl);
@@ -103,7 +147,6 @@ async function displayPokemonDetails(pokemonUrl) {
         }
         const detailData = await response.json();
 
-        // モーダルの内容を動的に生成
         modalContent.innerHTML = `
             <h2 class="text-3xl font-bold capitalize mb-4">${detailData.name}</h2>
             <img src="${detailData.sprites.front_default}" alt="${detailData.name}" class="mx-auto w-40 h-40 mb-4">
@@ -133,34 +176,27 @@ async function displayPokemonDetails(pokemonUrl) {
     }
 }
 
-// イベントデリゲーション: pokemonListElement にクリックイベントリスナーを設定
-// これにより、動的に生成されたポケモンカードのクリックも検知できる
 pokemonListElement.addEventListener('click', (event) => {
-    const clickedCard = event.target.closest('.pokemon-card'); // クリックされた要素から最も近いポケモンカード要素を探す
+    const clickedCard = event.target.closest('.pokemon-card');
     if (clickedCard) {
-        const pokemonUrl = clickedCard.dataset.pokemonUrl; // dataset からURLを取得
+        const pokemonUrl = clickedCard.dataset.pokemonUrl;
         if (pokemonUrl) {
-            displayPokemonDetails(pokemonUrl); // 詳細表示関数を呼び出す
+            displayPokemonDetails(pokemonUrl);
         }
     }
 });
 
-// モーダルを閉じるボタンのイベントリスナー
 closeModalButton.addEventListener('click', () => {
-    pokemonModal.classList.add('hidden'); // モーダルを非表示にする
+    pokemonModal.classList.add('hidden');
 });
 
-// モーダルの背景をクリックしても閉じるようにする
 pokemonModal.addEventListener('click', (event) => {
-    if (event.target === pokemonModal) { // モーダルの背景部分がクリックされた場合のみ
+    if (event.target === pokemonModal) {
         pokemonModal.classList.add('hidden');
     }
 });
 
-// ★★★ モーダル表示ロジックの追加ここまで ★★★
-
-
-// ページネーションボタンのイベントリスナーを設定 (既存)
+// ページネーションボタンのイベントリスナー (既存)
 const initialUrl = 'https://pokeapi.co/api/v2/pokemon?limit=20&offset=0';
 nextPageButton.addEventListener('click', () => {
     if (nextUrl) {
@@ -173,7 +209,6 @@ prevPageButton.addEventListener('click', () => {
     }
 });
 
-// ページが完全に読み込まれたときに、最初のポケモンリストを取得して表示 (既存)
 document.addEventListener('DOMContentLoaded', () => {
     fetchAndDisplayPokemons(initialUrl);
 });
