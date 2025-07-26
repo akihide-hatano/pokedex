@@ -1,12 +1,15 @@
-// DOM要素の取得 (既存の部分)
+// DOM要素の取得
 const pokemonListElement = document.getElementById('pokemonList');
 const prevPageButton = document.getElementById('prevPage');
 const nextPageButton = document.getElementById('nextPage');
 
-// モーダル関連のDOM要素を取得する部分 (既存)
+// モーダル関連のDOM要素を取得
 const pokemonModal = document.getElementById('pokemonModal');
 const closeModalButton = document.getElementById('closeModal');
 const modalContent = document.getElementById('modalContent');
+// モーダルの白いボックスの要素を追加で取得
+const modalWhiteBox = pokemonModal.querySelector('.bg-white.rounded-lg');
+
 
 let nextUrl = null;
 let prevUrl = null;
@@ -35,9 +38,7 @@ async function fetchAndDisplayPokemons(url) {
 
         pokemonListElement.innerHTML = ''; // 古いリストをクリア
 
-        // ★ 各ポケモンの詳細データを並行して取得するためのPromise.allSettled を使用
-        // これにより、個々のAPIリクエストが並行して走り、表示が速くなります。
-        // ただし、APIへのリクエスト数が一気に増える点に注意。
+        // 各ポケモンの詳細データを並行して取得するためのPromise.allSettled を使用
         const pokemonDetailsPromises = data.results.map(pokemon => fetch(pokemon.url).then(res => res.json()));
         const allPokemonDetails = await Promise.allSettled(pokemonDetailsPromises);
 
@@ -51,9 +52,10 @@ async function fetchAndDisplayPokemons(url) {
 
                 // ポケモンカードのHTML要素を動的に作成
                 const pokemonCard = document.createElement('div');
-                // ★ bg-white を削除し、backgroundColorClass を追加
+                // bg-white を削除し、backgroundColorClass を追加
                 pokemonCard.classList.add('pokemon-card', 'p-6', 'rounded-xl', 'shadow-lg', 'text-center', 'transform', 'hover:scale-105', 'transition-transform', 'duration-200', 'cursor-pointer', backgroundColorClass);
 
+                // dataset 属性にポケモンの詳細URLを保存
                 pokemonCard.dataset.pokemonUrl = pokemon.url;
 
                 pokemonCard.innerHTML = `
@@ -80,13 +82,13 @@ async function fetchAndDisplayPokemons(url) {
     }
 }
 
-// URLからIDを抽出するヘルパー関数 (既存)
+// URLからIDを抽出するヘルパー関数
 function extractIdFromUrl(url) {
     const parts = url.split('/');
     return parts[parts.length - 2];
 }
 
-// ポケモンのタイプに応じたテキストの色クラスを返すヘルパー関数 (既存)
+// ポケモンのタイプに応じたテキストの色クラスを返すヘルパー関数
 function getTypeColorClass(type) {
     switch (type) {
         case 'normal': return 'bg-gray-300 text-gray-800';
@@ -110,8 +112,7 @@ function getTypeColorClass(type) {
     }
 }
 
-// ★★★ カードの背景色用の新しいヘルパー関数を追加 ★★★
-// getCardBackgroundColorClass - カードの背景色に使うクラスを返す
+// カードの背景色に使うクラスを返すヘルパー関数
 function getCardBackgroundColorClass(type) {
     switch (type) {
         case 'normal': return 'bg-gray-400';
@@ -135,10 +136,17 @@ function getCardBackgroundColorClass(type) {
     }
 }
 
-// モーダル表示ロジック (既存)
+// 詳細データを取得し、モーダルに表示する関数
 async function displayPokemonDetails(pokemonUrl) {
-    modalContent.innerHTML = '<p class="text-gray-500">詳細データを読み込み中...</p>';
-    pokemonModal.classList.remove('hidden');
+    // モーダル表示前に、一旦元の白い背景に戻しておく
+    const currentBgClass = modalWhiteBox.className.match(/bg-[a-z]+-[0-9]+/);
+    if (currentBgClass) {
+        modalWhiteBox.classList.remove(currentBgClass[0]);
+    }
+    modalWhiteBox.classList.add('bg-white'); // デフォルトは白に戻しておく
+    
+    modalContent.innerHTML = '<p class="text-gray-500">詳細データを読み込み中...</p>'; // ローディング表示
+    pokemonModal.classList.remove('hidden'); // モーダルを表示
 
     try {
         const response = await fetch(pokemonUrl);
@@ -147,10 +155,23 @@ async function displayPokemonDetails(pokemonUrl) {
         }
         const detailData = await response.json();
 
+        // モーダルの白いボックスの背景色を変更
+        const mainType = detailData.types[0].type.name; // メインタイプを取得
+        const modalBackgroundColorClass = getCardBackgroundColorClass(mainType); // 背景色クラスを取得
+
+        // 既存の背景色クラスを削除し、新しい背景色クラスを追加
+        const currentBg = modalWhiteBox.className.match(/bg-[a-z]+-[0-9]+/);
+        if (currentBg) {
+            modalWhiteBox.classList.remove(currentBg[0]);
+        }
+        modalWhiteBox.classList.add(modalBackgroundColorClass); // 新しい背景色を追加
+
+
+        // モーダルの内容を動的に生成
         modalContent.innerHTML = `
-            <h2 class="text-3xl font-bold capitalize mb-4">${detailData.name}</h2>
+            <h2 class="text-3xl font-bold capitalize mb-4 text-white">${detailData.name}</h2>
             <img src="${detailData.sprites.front_default}" alt="${detailData.name}" class="mx-auto w-40 h-40 mb-4">
-            <p class="text-lg text-gray-700 mb-2">ID: #${String(detailData.id).padStart(3, '0')}</p>
+            <p class="text-lg text-white mb-2">ID: #${String(detailData.id).padStart(3, '0')}</p>
             <div class="mt-3 flex justify-center space-x-2 mb-4">
                 ${detailData.types.map(typeInfo => `
                     <span class="px-4 py-2 text-sm font-semibold rounded-full ${getTypeColorClass(typeInfo.type.name)}">
@@ -158,12 +179,12 @@ async function displayPokemonDetails(pokemonUrl) {
                     </span>
                 `).join('')}
             </div>
-            <div class="grid grid-cols-2 gap-2 text-left mb-4">
+            <div class="grid grid-cols-2 gap-2 text-left mb-4 text-white">
                 <p><strong>高さ:</strong> ${detailData.height / 10} m</p>
                 <p><strong>重さ:</strong> ${detailData.weight / 10} kg</p>
                 <p class="col-span-2"><strong>特性:</strong> ${detailData.abilities.map(abilityInfo => abilityInfo.ability.name).join(', ')}</p>
             </div>
-            <p class="text-sm text-gray-600">
+            <p class="text-sm text-white">
                 ${detailData.flavor_text_entries && detailData.flavor_text_entries.length > 0
                     ? detailData.flavor_text_entries.find(entry => entry.language.name === 'en')?.flavor_text || ''
                     : ''}
@@ -171,11 +192,18 @@ async function displayPokemonDetails(pokemonUrl) {
         `;
 
     } catch (error) {
+        // エラー発生時は、モーダルボックスの背景を白に戻す
+        const currentBgClass = modalWhiteBox.className.match(/bg-[a-z]+-[0-9]+/);
+        if (currentBgClass) {
+            modalWhiteBox.classList.remove(currentBgClass[0]);
+        }
+        modalWhiteBox.classList.add('bg-white'); // エラー時は白背景に戻す
         modalContent.innerHTML = `<p class="text-red-500">詳細データの取得中にエラーが発生しました: ${error.message}</p>`;
         console.error('詳細データの取得中にエラーが発生しました:', error);
     }
 }
 
+// イベントデリゲーション: pokemonListElement にクリックイベントリスナーを設定
 pokemonListElement.addEventListener('click', (event) => {
     const clickedCard = event.target.closest('.pokemon-card');
     if (clickedCard) {
@@ -186,17 +214,31 @@ pokemonListElement.addEventListener('click', (event) => {
     }
 });
 
+// モーダルを閉じるボタンのイベントリスナー
 closeModalButton.addEventListener('click', () => {
     pokemonModal.classList.add('hidden');
+    // モーダルが閉じるときに背景色を白に戻す
+    const currentBgClass = modalWhiteBox.className.match(/bg-[a-z]+-[0-9]+/);
+    if (currentBgClass) {
+        modalWhiteBox.classList.remove(currentBgClass[0]);
+    }
+    modalWhiteBox.classList.add('bg-white');
 });
 
+// モーダルの背景をクリックしても閉じるようにする
 pokemonModal.addEventListener('click', (event) => {
     if (event.target === pokemonModal) {
         pokemonModal.classList.add('hidden');
+        // モーダルが閉じるときに背景色を白に戻す
+        const currentBgClass = modalWhiteBox.className.match(/bg-[a-z]+-[0-9]+/);
+        if (currentBgClass) {
+            modalWhiteBox.classList.remove(currentBgClass[0]);
+        }
+        modalWhiteBox.classList.add('bg-white');
     }
 });
 
-// ページネーションボタンのイベントリスナー (既存)
+// ページネーションボタンのイベントリスナーを設定
 const initialUrl = 'https://pokeapi.co/api/v2/pokemon?limit=20&offset=0';
 nextPageButton.addEventListener('click', () => {
     if (nextUrl) {
@@ -209,6 +251,7 @@ prevPageButton.addEventListener('click', () => {
     }
 });
 
+// ページが完全に読み込まれたときに、最初のポケモンリストを取得して表示
 document.addEventListener('DOMContentLoaded', () => {
     fetchAndDisplayPokemons(initialUrl);
 });
